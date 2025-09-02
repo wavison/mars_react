@@ -3,6 +3,7 @@ import axios from "axios";
 import Plot from "react-plotly.js";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
+import "./edges.css"; // adds .edge-view { filter: url(#sobel-edges) }
 
 const NASA_API_KEY = "3tGJehPh5AY4tV7wlm63TD3qylzoRBFlXhlBKB84"; // Replace with your API key
 const ROVERS = ["Curiosity", "Opportunity", "Spirit", "Perseverance"];
@@ -14,6 +15,58 @@ const CAMERAS = {
   NAVCAM: "Navigation",
 };
 
+// Renders the SVG filter once so <img class="edge-view"> can use it
+function SvgFilters() {
+  return (
+    <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden="true">
+      <filter id="sobel-edges">
+        {/* Grayscale */}
+        <feColorMatrix
+          type="matrix"
+          values={`
+            0.2126 0.7152 0.0722 0 0
+            0.2126 0.7152 0.0722 0 0
+            0.2126 0.7152 0.0722 0 0
+            0       0      0      1 0
+          `}
+          result="gray"
+        />
+        {/* Horizontal Sobel */}
+        <feConvolveMatrix
+          order="3"
+          kernelMatrix="-1 0 1 -2 0 2 -1 0 1"
+          preserveAlpha="true"
+          in="gray"
+          result="gx"
+        />
+        {/* Vertical Sobel */}
+        <feConvolveMatrix
+          order="3"
+          kernelMatrix="-1 -2 -1 0 0 0 1 2 1"
+          preserveAlpha="true"
+          in="gray"
+          result="gy"
+        />
+        {/* |G| approximation */}
+        <feComposite in="gx" in2="gx" operator="arithmetic" k1="0" k2="0" k3="1" k4="0" result="gx2" />
+        <feComposite in="gy" in2="gy" operator="arithmetic" k1="0" k2="0" k3="1" k4="0" result="gy2" />
+        <feComposite in="gx2" in2="gy2" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="sum" />
+        <feComponentTransfer in="sum">
+          <feFuncR type="gamma" amplitude="1" exponent="0.5" offset="0" />
+          <feFuncG type="gamma" amplitude="1" exponent="0.5" offset="0" />
+          <feFuncB type="gamma" amplitude="1" exponent="0.5" offset="0" />
+        </feComponentTransfer>
+        {/* Invert to white edges on black */}
+        <feComponentTransfer>
+          <feFuncR type="table" tableValues="1 0" />
+          <feFuncG type="table" tableValues="1 0" />
+          <feFuncB type="table" tableValues="1 0" />
+        </feComponentTransfer>
+      </filter>
+    </svg>
+  );
+}
+
 export default function App() {
   const [photos, setPhotos] = useState([]);
   const [sol, setSol] = useState(1000);
@@ -22,9 +75,10 @@ export default function App() {
   const [temps, setTemps] = useState([]);
   const [mapPoints, setMapPoints] = useState([]);
 
-  // NEW: lightbox state
+  // Lightbox state
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [showEdges, setShowEdges] = useState(false); // toggles edge view
 
   // Fetch rover photos
   useEffect(() => {
@@ -53,7 +107,7 @@ export default function App() {
     fetchTemps();
   }, []);
 
-  // Generate fake lat/lon points for photos (NASA API doesn’t provide exact coords)
+  // Fake lat/lon points (API has no exact coords for photos)
   useEffect(() => {
     setMapPoints(
       photos.map(() => ({
@@ -67,12 +121,12 @@ export default function App() {
   const openLightbox = (index) => {
     setSelectedIndex(index);
     setIsLightboxOpen(true);
-    // Prevent background scroll when open
     document.body.style.overflow = "hidden";
   };
   const closeLightbox = () => {
     setIsLightboxOpen(false);
     document.body.style.overflow = "";
+    setShowEdges(false); // reset on close
   };
   const showPrev = useCallback(() => {
     setSelectedIndex((i) => (i - 1 + photos.length) % photos.length);
@@ -81,7 +135,7 @@ export default function App() {
     setSelectedIndex((i) => (i + 1) % photos.length);
   }, [photos.length]);
 
-  // Keyboard navigation when lightbox is open
+  // Keyboard navigation
   useEffect(() => {
     if (!isLightboxOpen) return;
     const onKey = (e) => {
@@ -97,6 +151,8 @@ export default function App() {
 
   return (
     <div style={{ padding: 20 }}>
+      <SvgFilters />
+
       <h1>Mars Rover Browser</h1>
 
       {/* Rover controls */}
@@ -288,6 +344,7 @@ export default function App() {
             <img
               src={selected.img_src}
               alt={`Mars photo — ${selected.camera?.full_name || selected.camera?.name || "Camera"} — ${selected.earth_date}`}
+              className={showEdges ? "edge-view" : ""}
               style={{
                 maxWidth: "95vw",
                 maxHeight: "80vh",
@@ -314,6 +371,19 @@ export default function App() {
                 {" "}• Sol {sol} • {selected.earth_date}
               </div>
               <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => setShowEdges((v) => !v)}
+                  style={{
+                    background: "rgba(255,255,255,0.1)",
+                    color: "#fff",
+                    padding: "6px 10px",
+                    borderRadius: 6,
+                    border: "1px solid rgba(255,255,255,0.3)",
+                    cursor: "pointer",
+                  }}
+                >
+                  {showEdges ? "Show original" : "Edge finder"}
+                </button>
                 <a
                   href={selected.img_src}
                   target="_blank"
