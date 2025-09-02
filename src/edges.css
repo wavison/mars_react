@@ -1,3 +1,30 @@
+/* Edges (Sobel) with adjustable chain for live preview */
 .edge-view {
-  filter: url(#sobel-edges);
+  filter: url(#sobel-edges)
+          brightness(var(--edge-brightness, 1))
+          contrast(var(--edge-contrast, 1.8))
+          blur(var(--edge-blur, 0px))
+          contrast(var(--edge-recontrast, 1));
+}
+
+/* Sharpen preview */
+.sharpen-view {
+  filter: url(#sharpen) contrast(var(--sharpen-contrast, 1.2));
+}
+
+/* Threshold preview (CSS-only) */
+.threshold-view {
+  filter: grayscale(1)
+          brightness(var(--thresh-shift, 1))
+          contrast(9999%)
+          invert(var(--thresh-invert, 0));
+}
+
+/* Outline overlay preview */
+.outline-wrap img { display: block; max-width: 95vw; max-height: 80vh; border-radius: 8px; margin: 0 auto; }
+.outline-overlay {
+  filter: url(#sobel-colored-edges)
+          hue-rotate(var(--outline-hue, 0deg))
+          saturate(var(--outline-sat, 3))
+          blur(var(--outline-blur, 0px));
 }
